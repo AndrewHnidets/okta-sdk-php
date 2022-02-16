@@ -18,6 +18,7 @@
 namespace Okta\DataStore;
 
 use Cache\Adapter\Common\CacheItem;
+use Psr\Http\Message\ResponseInterface;
 use function GuzzleHttp\Psr7\build_query;
 use function GuzzleHttp\Psr7\parse_query;
 use Http\Client\Common\Plugin\AuthenticationPlugin;
@@ -82,10 +83,15 @@ class DefaultDataStore
     private $resource;
 
     /**
+     * @var ResponseInterface Last Response recieved
+     */
+    private $lastResponse;
+
+    /**
      * DefaultDataStore constructor.
      *
-     * @param string          $token
-     * @param string          $organizationUrl
+     * @param string $token
+     * @param string $organizationUrl
      * @param HttpClient|NULL $httpClient
      * @param AuthorizationMode|NULL $authorizationMode
      */
@@ -93,7 +99,7 @@ class DefaultDataStore
     {
         $this->token = $token;
         $this->organizationUrl = $organizationUrl;
-        if($authorizationMode === null) {
+        if ($authorizationMode === null) {
             $authorizationMode = new AuthorizationMode(AuthorizationMode::SSWS);
         }
 
@@ -103,7 +109,7 @@ class DefaultDataStore
 
         $this->httpClient = new PluginClient(
             $httpClient ?: HttpClientDiscovery::find(),
-            [ $authenticationPlugin ]
+            [$authenticationPlugin]
         );
 
         $this->uriFactory = UriFactoryDiscovery::find();
@@ -116,9 +122,9 @@ class DefaultDataStore
     /**
      * Create a new instance of a class with the provided properties.
      *
-     * @param string         $class Class to instantiate.
+     * @param string $class Class to instantiate.
      * @param \stdClass|NULL $properties The properties you want to use to instantiate.
-     * @param array          $options Any options you want to set.
+     * @param array $options Any options you want to set.
      * @return object
      */
     public function instantiate(string $class, \stdClass $properties = null, array $options = [])
@@ -219,11 +225,11 @@ class DefaultDataStore
      *
      * @return mixed
      */
-    public function createResource($href, $resource, $returnType, $query=[])
+    public function createResource($href, $resource, $returnType, $query = [])
     {
         $this->resource = $resource;
         $uri = $this->uriFactory->createUri($this->organizationUrl . '/api/v1' . $href);
-        if(!empty($query)) {
+        if (!empty($query)) {
             $uri = $uri->withQuery(http_build_query($query));
         }
 
@@ -255,8 +261,8 @@ class DefaultDataStore
      *
      * @param string $method The type of request.
      * @param UriInterface $uri The URI object of the request.
-     * @param string       $body The body of the request.
-     * @param array        $options The options for the request.
+     * @param string $body The body of the request.
+     * @param array $options The options for the request.
      *
      * @return mixed|null
      * @throws ResourceException
@@ -266,7 +272,7 @@ class DefaultDataStore
         $cacheManager = $cacheManager = Client::getInstance()->getCacheManager();
         $cacheKey = $cacheManager->createCacheKey($uri);
 
-        if('GET' == $method && $cacheManager->pool()->hasItem($cacheKey)) {
+        if ('GET' == $method && $cacheManager->pool()->hasItem($cacheKey)) {
             return $cacheManager->pool()->getItem($cacheKey)->get();
         }
 
@@ -292,6 +298,7 @@ class DefaultDataStore
         $request = $this->messageFactory->createRequest($method, $uri, $headers, $body);
 
         $response = $this->httpClient->sendRequest($request);
+        $this->lastResponse = $response;
 
         $result = $response->getBody() ? json_decode($response->getBody()) : null;
 
@@ -305,21 +312,21 @@ class DefaultDataStore
         }
 
         if (!is_array($result)) {
-            switch($method) {
+            switch ($method) {
                 case 'GET':
-                    if(null !== $result) {
+                    if (null !== $result) {
                         $cacheManager->save($uri, $result);
                     }
                     break;
                 case 'POST':
                 case 'PUT':
-                    if(null !== $result) {
+                    if (null !== $result) {
                         $cacheManager->delete($uri, $result);
                         $cacheManager->save($uri, $result);
                     }
                     break;
                 case 'DELETE':
-                    if(null !== $this->resource) {
+                    if (null !== $this->resource) {
                         $cacheManager->delete($uri, $this->toStdClass($this->resource));
                     }
                     break;
@@ -359,7 +366,7 @@ class DefaultDataStore
         $query = array();
 
         foreach ($options as $key => $opt) {
-            $query[$key] = !is_bool($opt)?
+            $query[$key] = !is_bool($opt) ?
                 strval($opt) :
                 var_export($opt, true);
         }
@@ -451,5 +458,10 @@ class DefaultDataStore
     public function buildUri(string $uri): UriInterface
     {
         return $this->uriFactory->createUri($uri);
+    }
+
+    public function getLastResponse(): ResponseInterface
+    {
+        return $this->lastResponse;
     }
 }
