@@ -332,7 +332,26 @@ class DefaultDataStore
                     break;
             }
         }
-        return $result;
+        return [$result, $response];
+    }
+
+    private function getNextPageAfterProperty($response)
+    {
+        if (!$response) {
+            return null;
+        }
+
+        $next = $response->getHeader('link')[1] ?? null;
+
+        if (!$next) {
+            return $next;
+        }
+
+        $url_components = parse_url($next);
+
+        parse_str($url_components['query'], $params);
+
+        return $params['after'] ?? null;
     }
 
     /**
