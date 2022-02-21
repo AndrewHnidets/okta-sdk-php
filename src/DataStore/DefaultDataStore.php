@@ -335,7 +335,7 @@ class DefaultDataStore
         return [$result, $response];
     }
 
-    private function getNextPageAfterProperty($response)
+    public function getNextPageAfterProperty($response)
     {
         if (!$response) {
             return null;
